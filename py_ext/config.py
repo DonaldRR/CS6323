@@ -1,4 +1,4 @@
-HOST = "127.0.0.1"
+HOST = "192.168.1.103"
 PORT = 1238
 MEMORY_SIZE = 5000
 gamma = 0.5

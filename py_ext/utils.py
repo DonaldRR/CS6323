@@ -3,11 +3,11 @@ import torch
 import numpy as np
 
 
-def toTensor(data, gpu=-1):
+def toTensor(data, gpu=None):
 
     data = torch.from_numpy(np.array(data)).float()
-    if gpu >= 0:
-        data = data.to(gpu)
+    if gpu:
+        data = data.to(device=gpu)
 
     return data
 

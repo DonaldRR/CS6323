@@ -83,6 +83,8 @@ class Actor(nn.Module):
     def sample_action(action):
 
         noise = (torch.rand(action.size()) - 0.5) * 2 * 0.2
+        noise = noise.to(action.device)
+
         action = action + noise
         action = torch.clamp(action, 0, 1)
 

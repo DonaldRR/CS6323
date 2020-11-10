@@ -35,6 +35,18 @@ class ModelEnv:
 
     def compute_reward(self, state):
 
+        """
+
+        :param state: torch.tensor
+        :return:
+        """
+
+        if isinstance(state, torch.Tensor):
+            if state.device == torch.device('cpu'):
+                state = state.numpy()
+            else:
+                state = state.detach().cpu().numpy()
+
         nearest_d = math.sqrt(self.H ** 2 + self.W ** 2)
         for i in range(N_PREY):
 
