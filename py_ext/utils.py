@@ -22,12 +22,10 @@ def convert_nameValue(x):
 
     return value
 
-def update_target(train, target, tau=0.1):
+def soft_update(target, source, tau):
+    for target_param, param in zip(target.parameters(), source.parameters()):
+        target_param.data.copy_(target_param.data * (1.0 - tau) + param.data * tau)
 
-    target_state_dict = target.state_dict()
-    state_dict = train.state_dict()
-
-    for k, v in state_dict.items():
-        target_state_dict[k] = tau * v + (1 - tau) * target_state_dict[k]
-
-    target.load_state_dict(target_state_dict)
+def hard_update(target, source):
+    for target_param, param in zip(target.parameters(), source.parameters()):
+        target_param.data.copy_(param.data)

@@ -34,8 +34,8 @@ if __name__ == '__main__':
     critic_net_target.to(device=device)
 
     # init target
-    actor_net_target.load_state_dict(actor_net.state_dict())
-    critic_net_target.load_state_dict(critic_net.state_dict())
+    hard_update(actor_net_target, actor_net)
+    hard_update(critic_net_target, critic_net)
 
     actor_net_target.eval()
     critic_net_target.eval()
@@ -45,7 +45,7 @@ if __name__ == '__main__':
     critic_optim = optim.Adam(critic_net.parameters(), lr=0.005, weight_decay=1e-5)
 
     # memory bank
-    buffer = Buffer()
+    buffer = Buffer(batch_size=BATCH_SIZE)
 
     # tensorboard logger
     tb = SummaryWriter()
@@ -93,7 +93,7 @@ if __name__ == '__main__':
                     cur_q = critic_net(cur_state.unsqueeze(0), cur_action.unsqueeze(0)) # q_t
 
                     if len(states) > 1:
-                        buffer.append([states[-1], actions[-1], prev_reward, cur_state])
+                        buffer.append([states[-1].detach(), actions[-1].detach(), prev_reward, cur_state.detach()])
 
                     states.append(cur_state)
                     rewards.append(prev_reward)
@@ -112,18 +112,17 @@ if __name__ == '__main__':
                     # train actor/critic
                     with torch.autograd.set_detect_anomaly(True):
                         if buffer.ready and not is_eval:
-                            print(T)
                             s_t, a_t, r_t, s_t_ = buffer.get_batch()
 
                             critic_net.train()
                             #q_t = critic_net(s_t, a_t)
-                            q_t_ = critic_net_target(s_t_, actor_net_target(s_t_))
+                            q_t_ = critic_net_target(s_t_, actor_net_target(s_t_).detach()).detach()
                             q_t = critic_net(s_t, a_t)
                             y = r_t + gamma * q_t_
                             l_q = ((y - q_t)**2).mean()
 
                             critic_optim.zero_grad()
-                            l_q.backward(retain_graph=True)
+                            l_q.backward()
                             critic_optim.step()
 
                             critic_net.eval()
@@ -133,8 +132,8 @@ if __name__ == '__main__':
                             q.backward()
                             actor_optim.step()
 
-                            update_target(actor_net, actor_net_target, tau)
-                            update_target(critic_net, critic_net_target, tau)
+                            soft_update(actor_net_target, actor_net, tau)
+                            soft_update(critic_net_target, critic_net, tau)
 
                 # logger
                 if is_eval:
