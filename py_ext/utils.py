@@ -3,6 +3,18 @@ import torch
 import numpy as np
 
 
+def toNPArr(data):
+
+    if isinstance(data, torch.Tensor):
+        if data.device == torch.device('cpu'):
+            data = data.numpy()
+        else:
+            data = data.detach().cpu().numpy()
+    else:
+        data = np.array(data)
+
+    return data
+
 def toTensor(data, gpu=None):
 
     data = torch.from_numpy(np.array(data)).float()

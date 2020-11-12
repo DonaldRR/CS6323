@@ -5,29 +5,25 @@ from config import *
 
 class Critic(nn.Module):
 
-    def __init__(self, state_size=4, action_size=3, hidden_size=32):
+    def __init__(self, state_size=2, action_size=2, hidden_size=64):
         super(Critic, self).__init__()
 
         self.state_trans = nn.Sequential(
             nn.Linear((N_PREY + N_PREDATOR) * state_size, hidden_size),
             nn.BatchNorm1d(hidden_size),
-            nn.ReLU(),
-            nn.Linear(hidden_size, hidden_size),
-            nn.BatchNorm1d(hidden_size)
+            nn.ReLU()
         )
 
         self.action_trans = nn.Sequential(
             nn.Linear(N_PREDATOR * action_size, hidden_size),
             nn.BatchNorm1d(hidden_size),
-            nn.ReLU(),
-            nn.Linear(hidden_size, hidden_size),
-            nn.BatchNorm1d(hidden_size)
+            nn.ReLU()
         )
 
         self.pred = nn.Sequential(
             nn.Linear(hidden_size * 2, hidden_size),
             nn.BatchNorm1d(hidden_size),
-            nn.ReLU(),
+            nn.Dropout(0.8),
             nn.Linear(hidden_size, 1)
         )
 
@@ -43,7 +39,7 @@ class Critic(nn.Module):
 
 class Actor(nn.Module):
 
-    def __init__(self, state_size=4, action_size=3, hidden_size=32):
+    def __init__(self, state_size=2, action_size=2, hidden_size=64):
         super(Actor, self).__init__()
 
         """
@@ -63,7 +59,9 @@ class Actor(nn.Module):
             nn.Linear(self.hidden_size, self.hidden_size),
             nn.BatchNorm1d(self.hidden_size),
             nn.ReLU(),
-            nn.Linear(self.hidden_size, N_PREDATOR * self.action_size),
+            nn.Dropout(0.8),
+            nn.Linear(self.hidden_size, self.action_size),
+            #nn.Linear(self.hidden_size, N_PREDATOR * self.action_size),
             #nn.Linear(self.hidden_size, N_PREDATOR * self.action_size * 2),
             #nn.ReLU(),
             nn.Sigmoid()
@@ -80,9 +78,9 @@ class Actor(nn.Module):
         return x
 
     @staticmethod
-    def sample_action(action):
+    def sample_action(action, noise):
 
-        noise = (torch.rand(action.size()) - 0.5) * 2 * 0.2
+        noise = (torch.rand(action.size()) - 0.5) * 2 * noise
         noise = noise.to(action.device)
 
         action = action + noise
@@ -95,10 +93,11 @@ class Actor(nn.Module):
         action_str = "action\n"
 
         for i in range(N_PREDATOR):
-            ax = action[i * 3] - 0.5
-            ay = action[i * 3 + 1] - 0.5
-            av = action[i * 3 + 2]
-            action_str += "%f,%f,%f;" % (ax, ay, av)
+            ax = (action[i * 2] - 0.5) * 2
+            ay = (action[i * 2 + 1] - 0.5) * 2
+            #av = action[i * 3 + 2]
+            #action_str += "%f,%f,%f;" % (ax, ay, av)
+            action_str += "%f,%f;" % (ax, ay)
 
         return action_str
 

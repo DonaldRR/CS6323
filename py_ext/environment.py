@@ -1,4 +1,5 @@
 import math
+import numpy as np
 
 from utils import *
 from config import *
@@ -33,38 +34,44 @@ class ModelEnv:
         self.prey = convert_nameValue(ball_prey_predator[1])
         self.predator = convert_nameValue(ball_prey_predator[2])
 
-    def compute_reward(self, state):
+    def find_nearest_target(self, position):
+
+        nearest_d = self.H + self.W
+        nearest_target = None
+
+        for kp in self.target_keypoints:
+            d = np.sqrt(np.sum((position - kp)**2))
+            if d < nearest_d:
+                nearest_d = d
+                nearest_target = kp
+
+        return nearest_target, nearest_d
+
+    def compute_reward(self, cur_state, prev_state):
 
         """
 
         :param state: torch.tensor
         :return:
         """
+        DIAG = np.sqrt(self.H**2 + self.W**2)
 
-        if isinstance(state, torch.Tensor):
-            if state.device == torch.device('cpu'):
-                state = state.numpy()
-            else:
-                state = state.detach().cpu().numpy()
+        cur_state = toNPArr(cur_state)
+        prev_state = toNPArr(prev_state)
 
-        nearest_d = math.sqrt(self.H ** 2 + self.W ** 2)
+        rewards = []
         for i in range(N_PREY):
 
-            pos = np.array(state[i*4:i*4+2])
+            cur_pos = np.array(cur_state[i*4:i*4+2])
+            prev_pos = np.array(prev_state[i*4:i*4+2])
 
-            for kp in self.target_keypoints:
-                d = np.sqrt(np.sum((pos - kp)**2))
-                if d < nearest_d:
-                    nearest_d = d
+            cur_target, cur_d = self.find_nearest_target(cur_pos)
+            prev_target, prev_d = self.find_nearest_target(prev_pos)
 
-        reward = 0
-        if nearest_d < 0.8 * self.H:
-            reward -= 0.1
-        if nearest_d < 0.6 * self.H:
-            reward -= 0.1
-        if nearest_d < 0.4 * self.H:
-            reward -= 0.1
-        if nearest_d < 0.2 * self.H:
-            reward -= 0.1
+            reward = cur_d - prev_d
+            reward = reward / np.exp(cur_d / DIAG)
+            rewards.append(reward)
 
-        return reward
+        ret = np.average(rewards) / DIAG
+
+        return ret
