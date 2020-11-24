@@ -8,254 +8,31 @@
 
 #include "Scheduler.hpp"
 
-//------------------------------------------------- Comm -------------------------------------------------------
-
-void Comm::init(){
-    
-    _serv_sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-    
-    struct sockaddr_in serv_addr;
-    memset(&serv_addr, 0, sizeof(serv_addr));
-    serv_addr.sin_family = AF_INET;
-    serv_addr.sin_addr.s_addr = inet_addr("127.0.0.1");
-    serv_addr.sin_port = htons(1238);
-    bind(_serv_sock, (struct sockaddr*)&serv_addr, sizeof(serv_addr));
-    
-    listen(_serv_sock, 20);
-    
-    struct sockaddr_in clnt_addr;
-    socklen_t clnt_addr_size = sizeof(clnt_addr);
-    std::cout << "[Listening ...]" << std::endl;
-    _clnt_sock = accept(_serv_sock, (struct sockaddr*)&clnt_addr, &clnt_addr_size);
-    std::cout << "[Connected]" << std::endl;
-
-};
-
-void Comm::send(std::string s)
-{
-    clear_buffer();
-    
-    memcpy(&_buffer, s.c_str(), s.size());
-
-    ::send(_clnt_sock, _buffer, 1024, 0);
-//    std::cout << "[Sent] " << s << std::endl;
-}
 
 
-void Comm::receive()
-{
-    clear_buffer();
-    clear_message();
-
-    while (true) {
-        if (recv(_clnt_sock, _buffer, sizeof(_buffer), 0)) {
-            break;
-        }
-    }
-    
-    std::string s_buffer = std::string(_buffer);
-//    std::cout << "[Received] " << s_buffer << std::endl;
-    
-    int idx_delim = s_buffer.find("\n");
-    std::string msg_type = s_buffer.substr(0, idx_delim);
-    
-    s_buffer.erase(0, idx_delim + 2);
-//    std::cout << "trimmed string:" << s_buffer << std::endl;
-    
-    if (msg_type == "start") {
-        _msg.type = START;
-    }
-    else if (msg_type == "action") {
-        _msg.type = ACTION;
-        
-        int idx_item = s_buffer.find(";");
-        while (idx_item >= 0) {
-            
-            glm::vec2 action{0.0f, 0.0f};
-            // read ax
-            float idx_n = s_buffer.find(",");
-            action[0] = std::stof(s_buffer.substr(0, idx_n));
-            s_buffer.erase(0, idx_n + 1);
-            // read ay
-            idx_n = s_buffer.find(",");
-            action[1] = std::stof(s_buffer.substr(0, idx_n));
-            s_buffer.erase(0, idx_n + 1);
-            // read v
-            action = glm::normalize(action);
-            idx_n = s_buffer.find(";");
-            action *= std::stof(s_buffer.substr(0, idx_n));
-            s_buffer.erase(0, idx_n + 1);
-            
-            idx_item = s_buffer.find(";");
-//            std::cout << "action:" << glm::to_string(action) << std::endl;
-            _msg.vecs.push_back(action);
-        }
-    }
-}
-
-Message Comm::get_message()
-{
-    return _msg;
-}
-
-void Comm::clear_message()
-{
-    _msg.type = NONE;
-    _msg.vecs.clear();
-}
-
-void Comm::clear_buffer()
-{
-    memset(&_buffer, 0, sizeof(_buffer));
-}
-
-//------------------------------------------------- Model -------------------------------------------------------
-
-Object* Model::get_object(){return _scheduler->get_object(_obj_index);};
-
-//------------------------------------------------- Target -------------------------------------------------------
-
-void Target::_interpolate_keypoints()
-{
-    
-    int N = 5;
-    for (int i = 0; i < _keypoints.size(); i ++) {
-        
-        _extended_keypoints.push_back(_keypoints[i]);
-        glm::vec2 cur_point = _keypoints[i], next_point = i == _keypoints.size() - 1 ? _keypoints[0] : _keypoints[i + 1];
-        glm::vec2 norm_vec = glm::normalize(next_point - cur_point);
-        float d = glm::distance(cur_point, next_point);
-        
-        for (int j = 1; j < N + 1; j ++) {
-            glm::vec2 interpolated_point = cur_point + norm_vec * (d * float(j)/(N + 1));
-            _extended_keypoints.push_back(interpolated_point);
-        }
-    }
-};
-
-bool Target::hit_target(glm::vec2 pos)
-{
-    float sign = 0;
-    bool hit = true;
-    
-    glm::vec3 pos_vec3{pos[0], pos[1], 0.0f};
-    for (int i = 0; i < _keypoints.size(); i ++ ) {
-        
-        glm::vec3 cur_pos, next_pos;
-        cur_pos = {_keypoints[i][0], _keypoints[i][1], 0.0f};
-        if (i == _keypoints.size() - 1) {
-            next_pos = {_keypoints[0][0], _keypoints[0][1], 0.0f};
-        }
-        else{
-            next_pos = {_keypoints[i + 1][0], _keypoints[i + 1][1], 0.0f};
-        }
-        
-        glm::vec3 axb = glm::cross(pos_vec3 - cur_pos, next_pos - cur_pos);
-
-        if (i > 0 && sign * axb[2] < 0) {
-            hit = false;
-        }
-    
-        sign = axb[2];
-    }
-    
-    return hit;
-}
-
-std::string Target::state2string()
-{
-    std::string ret = "";
-    
-    for (int i = 0; i < _extended_keypoints.size(); i ++ ) {
-        std::string tmp = std::to_string(i) + ":";
-        tmp += "(";
-        tmp += std::to_string(_extended_keypoints[i][0]);
-        tmp += ",";
-        tmp += std::to_string(_extended_keypoints[i][1]);
-        tmp += ");";
-        ret += tmp;
-    }
-    
-    return ret;
-}
-
-//------------------------------------------------- Player -------------------------------------------------------
-
-void Player::update_speed(glm::vec2 acc)
-{
-    // Update object position with its speed calculated by current acceleration
-    _speed = _speed + _acc / float(TIME_SLICES);
-    float v = glm::length(_speed);
-    if(v > 0)
-    {
-        v = std::min(v, 0.1f);
-        _speed = glm::normalize(_speed) * v;
-    }
-
-    // Modify the acceleration
-    if (_time_stamp % (PLAYER_UPDATE_PERIOD * TIME_SLICES) == 0) {
-        // Add force and update acceleration
-//        float force_angle = rand() % 360 / 180.0 * M_PI;
-//        _acc = {cos(force_angle), sin(force_angle)};
-        _acc = acc * float(0.05);
-    }
-    if (_time_stamp % (PLAYER_UPDATE_PERIOD * TIME_SLICES) == FORCE_APPLY_PERIOD) {
-        // Clear the force (acceleration)
-        _acc = {0.0f, 0.0f};
-    }
-    _time_stamp += 1;
-
-    // Update player speed if it hit the wall
-    glm::vec2 wall_modifiers;
-    wall_modifiers = collide(_position + _speed / float(TIME_SLICES));
-    if (wall_modifiers[0] != 0) {
-        int sign = wall_modifiers[0] > 0 ? -1 : 1;
-        _speed[0] = sign * abs(_speed[0]);
-    }
-    if (wall_modifiers[1] != 0) {
-        int sign = wall_modifiers[1] > 0 ? -1 : 1;
-        _speed[1] = sign * abs(_speed[1]);
-    }
-}
-
-void Player::update_position()
-{
-    glm::vec2 movement = _speed / float(TIME_SLICES);
-
-    glm::vec2 wall_modifiers;
-    wall_modifiers = collide(_position + movement);
-    float coef = 1.0f;
-    if (wall_modifiers[0] != 0.0 || wall_modifiers[1] != 0.0) {
-        int exceeded_axis = abs(wall_modifiers[0]) > abs(wall_modifiers[1]) ? 0 : 1;
-        coef = float(1.0 - wall_modifiers[exceeded_axis] / movement[exceeded_axis]);
-    }
-
-    movement = movement * coef;
-    _position = _position + movement;
-
-    _model_mat = _model_mat * glm::translate(glm::mat4{1.0f}, glm::vec3{movement[0], movement[1], 0.0f});
-//    std::cout << "Position:" << glm::to_string(_speed) <<  glm::to_string(_position) << std::endl;
-}
-
-std::string Player::state2string()
-{
-    std::string ret = "";
-
-    int type = _model_name == "prey" ? 0 : 1;
-    ret += "type:" + std::to_string(type) + ";";
-    ret += "pos:(" + std::to_string(_position[0]) + "," + std::to_string(_position[1]) + ");";
-    ret += "speed:(" + std::to_string(_speed[0]) + "," + std::to_string(_speed[1]) + ");";
-    
-    return ret;
-}
-
-
-glm::vec2 Player::collide(glm::vec2 pos)
-{
-    return _scheduler->in_board(pos);
-}
 
 //------------------------------------------------- Scheduler -------------------------------------------------------
+
+
+Scheduler::Scheduler(){
+    _board_x = 10;
+    _board_y = 10;
+    _ball_size = 1;
+    srand(time(NULL));
+    
+    _comm = new Comm();
+};
+
+int Scheduler::enable_action()
+{
+
+    if (_time_stamp % (PLAYER_UPDATE_PERIOD * TIME_SLICES) == 0)
+        return 1;
+    if (_time_stamp % (PLAYER_UPDATE_PERIOD * TIME_SLICES) == FORCE_APPLY_PERIOD)
+        return 2;
+
+    return 0;
+}
 
 void Scheduler::build_environment()
 {
@@ -312,6 +89,28 @@ void Scheduler::init_players()
     float left_bottom[2] = {-_board_x / 2, -_board_y / 2};
     int n_col = _board_x / _ball_size, n_row = _board_y / _ball_size;
     int start_idx = _models.size();
+    
+    std::vector<int> col_idxs;
+    for (int i = 0; i < n_col; i ++)
+        col_idxs.push_back(i);
+    
+    std::vector<int> prey_col_idxs, predator_col_idxs;
+    for (int i = 0; i < n_col; i ++) {
+        prey_col_idxs.push_back(i);
+        predator_col_idxs.push_back(i);
+    }
+    
+    std::vector<std::vector<int> > position_idxs;
+    for (int i = 0; i < n_col; i ++)
+        for (int j = 0; j < n_row; j ++ )
+            position_idxs.push_back({i, j});
+    
+    std::random_device rd;
+    std::mt19937 g(rd());
+    std::shuffle(position_idxs.begin(), position_idxs.end(), g);
+//    std::shuffle(prey_col_idxs.begin(), prey_col_idxs.end(), g);
+//    std::shuffle(predator_col_idxs.begin(), predator_col_idxs.end(), g);
+    
     for (int i = 0; i < prey + predator; i ++ ) {
         
         glm::mat4 scale_mat{1.0f}, translate_mat{1.0f}, rotate_mat{1.0f};
@@ -319,23 +118,47 @@ void Scheduler::init_players()
         if (j >= predator) {
             j = j - predator;
         }
-        int row_offset = j / n_col, col_offset = j % n_col + 1;
-        if (col_offset % 2 == 1) {
-            col_offset = (n_col + 1) / 2 - int(col_offset / 2) - 1;
-        } else {
-            col_offset = (n_col + 1) / 2 + int(col_offset / 2) - 1;
-        }
+        
+        int row_offset, col_offset;
+//        row_offset = j / n_col;
+//        col_offset = j % n_col + 1;
+//        if (col_offset % 2 == 1) {
+//            col_offset = (n_col + 1) / 2 - int(col_offset / 2) - 1;
+//        } else {
+//            col_offset = (n_col + 1) / 2 + int(col_offset / 2) - 1;
+//        }
         
         float extra_offset = 0;
         glm::vec3 model_color{1.0f};
         std::string model_name;
         if (i < predator) {
+            while (true) {
+                std::vector<int> idxs = position_idxs.back();
+                position_idxs.pop_back();
+                if (idxs[1] < 7) {
+                    col_offset = idxs[0];
+                    row_offset = idxs[1];
+                    break;
+                }
+            }
+//            col_offset = predator_col_idxs[j];
+//            row_offset += n_row / 2 - 1;
             model_color =glm::vec3(1.0f, 0.0f, 0.0f);
             model_name = "predator";
         }
         else
         {
-            row_offset = n_row - 1 - row_offset;
+            while (true) {
+                std::vector<int> idxs = position_idxs.back();
+                position_idxs.pop_back();
+                if (idxs[1] >= 5) {
+                    col_offset = idxs[0];
+                    row_offset = idxs[1];
+                    break;
+                }
+            }
+//            col_offset = prey_col_idxs[j];
+//            row_offset = n_row - 1 - row_offset;
             model_color =glm::vec3(0.0f, 1.0f, 0.0f);
             model_name = "prey";
 //            extra_offset = 0.5;
@@ -373,8 +196,8 @@ void Scheduler::update()
     }
     if (!_stop){
         
-        for (int t = 0; t < TIME_SLICES; t ++ ) {
-            
+        for (int t = 0; t < TIME_SLICES; t ++ )
+        {
             stop_detection();
             
             // send states
@@ -385,24 +208,34 @@ void Scheduler::update()
                 break;
             }
 
-            // receive decisions
-            _comm->receive();
-            msg = _comm->get_message();
-//            std::cout << "received2" << std::endl;
-            
-            std::vector<glm::vec2> actions = compute_action();
-
-            for (int i = 0; i < msg.vecs.size(); i ++ ) {
-//                std::cout << i << ":" << glm::to_string(actions[i]) << "," << glm::to_string(msg.vecs[i]) << std::endl;
-                actions[i] = msg.vecs[i];
+            // change force
+            if (enable_action() > 0) {
+                std::vector<glm::vec2> actions;
+                
+                // add force
+                if (enable_action() == 1)
+                {
+                    // receive decisions
+                    _comm->receive();
+                    msg = _comm->get_message();
+                    actions = compute_action();
+                    for (int i = 0; i < msg.vecs.size(); i ++ )
+                        actions[i] = msg.vecs[i];
+                }
+                // eliminate force
+                else if (enable_action() == 2)
+                {
+                    for (int i = 0; i < _players.size(); i ++)
+                        actions.push_back(glm::vec2{0.0f, 0.0f});
+                }
+                // update force
+                for (int i = 0; i < _players.size(); i ++)
+                    _players[i]->update_acc(actions[i]);
             }
             
             // Clear colliding ids
             for (int i = 0; i < _players.size(); i ++ )
-            {
-//                std::cout << "a" << i << ":" << glm::to_string(actions[i]) << std::endl;
-                _players[i]->update_speed(actions[i]);
-            }
+                _players[i]->update_speed();
 
             collision_update();
 
@@ -410,6 +243,8 @@ void Scheduler::update()
             {
                 _players[i]->update_position();
             }
+            
+            _time_stamp += 1;
         }
     }
 };
@@ -461,8 +296,9 @@ void Scheduler::collision_update()
         glm::vec2 next_pos = cur_pos + updated_speed / float(TIME_SLICES);
 
         // Weights for linear function that defines the track along the speed
-        float A, B, C;
-        glm::vec2 norm_speed = glm::normalize(updated_speed);
+        float A, B, C, v;
+        v = glm::length(updated_speed);
+        glm::vec2 norm_speed =  v > 0 ? glm::normalize(updated_speed) : glm::vec2{1.0f, 1.0f};
         A = norm_speed[1];
         B = - norm_speed[0];
         C = - A * next_pos[0] - B * next_pos[1];
@@ -478,7 +314,7 @@ void Scheduler::collision_update()
                 float d1, d2;
                 d1 = abs(A * pos[0] + B * pos[1] + C) / sqrt(pow(A, 2.0) + pow(B, 2.0));
                 
-                if (d1 <= _ball_size)
+                if (v == 0 or (v > 0 and d1 <= _ball_size))
                 {
                     float movement = glm::length(updated_speed) / float(TIME_SLICES);
                     d2 = glm::dot(norm_speed, pos - cur_pos);
@@ -486,7 +322,6 @@ void Scheduler::collision_update()
                     {
                     
                         auto speed = player->get_speed();
-                        
                         glm::vec2 relative_dir = glm::normalize(pos - cur_pos);
                         float m2 = player->get_mass();
                         float v1 = glm::dot(updated_speed, relative_dir);
@@ -549,34 +384,39 @@ std::vector<glm::vec2> Scheduler::compute_action()
                     nearest_target_point = kp;
                 }
             }
+//            std::cout << "pos:" << glm::to_string(cur_pos) << "->" << glm::to_string(nearest_target_point) << std::endl;
+            actions.push_back(glm::normalize(nearest_target_point - cur_pos) * 0.7f);
             
-            float A, B, C_;
-            A = (nearest_target_point[0] - cur_pos[0]) / (cur_pos[0] * nearest_target_point[1] - nearest_target_point[0] * cur_pos[1]);
-            B = (cur_pos[1] - nearest_target_point[1]) / (cur_pos[0] * nearest_target_point[1] - nearest_target_point[0] * cur_pos[1]);
-            glm::vec2 candidate_dir1, candidate_dir2;
-            if (A == 0)
-            {
-                candidate_dir1 = {0.0f, 1.0f};
-            }
-            else if (B == 0)
-            {
-                candidate_dir1 = {1.0f, 0.0f};
-            }
-            else
-            {
-                candidate_dir1 = {1.0f, B / A * 1.0f};
-            }
-            candidate_dir2 = - candidate_dir1;
-//            std::cout << "prey_pos:" << glm::to_string(cur_pos) << " target:" << glm::to_string(nearest_target_point) << std::endl;
-            
-            if (glm::distance(cur_pos + candidate_dir1, nearest_target_point) < glm::distance(cur_pos + candidate_dir2, nearest_target_point))
-            {
-                actions.push_back(glm::normalize(candidate_dir1) + glm::normalize(nearest_target_point - cur_pos));
-            }
-            else
-            {
-                actions.push_back(glm::normalize(candidate_dir2) + glm::normalize(nearest_target_point - cur_pos));
-            }
+//            float A, B, C_;
+//            A = (nearest_target_point[0] - cur_pos[0]) / (cur_pos[0] * nearest_target_point[1] - nearest_target_point[0] * cur_pos[1]);
+//            B = (cur_pos[1] - nearest_target_point[1]) / (cur_pos[0] * nearest_target_point[1] - nearest_target_point[0] * cur_pos[1]);
+//            glm::vec2 candidate_dir1, candidate_dir2;
+//            if (A == 0)
+//            {
+//                candidate_dir1 = {0.0f, 1.0f};
+//            }
+//            else if (B == 0)
+//            {
+//                candidate_dir1 = {1.0f, 0.0f};
+//            }
+//            else
+//            {
+//                candidate_dir1 = {1.0f, B / A * 1.0f};
+//            }
+//            candidate_dir2 = - candidate_dir1;
+////            std::cout << "prey_pos:" << glm::to_string(cur_pos) << " target:" << glm::to_string(nearest_target_point) << std::endl;
+//            std::cout << "dir1:" << glm::to_string(candidate_dir1) << " dir2:" << glm::to_string(candidate_dir2) << std::endl;
+//
+//            if (glm::distance(cur_pos + candidate_dir1, nearest_target_point) < glm::distance(cur_pos + candidate_dir2, nearest_target_point))
+//            {
+//                actions.push_back(glm::normalize(candidate_dir1) + glm::normalize(nearest_target_point - cur_pos));
+//                std::cout << "action:" << glm::to_string(actions.back()) << std::endl;
+//            }
+//            else
+//            {
+//                actions.push_back(glm::normalize(candidate_dir2) + glm::normalize(nearest_target_point - cur_pos));
+//                std::cout << "action:" << glm::to_string(actions.back()) << std::endl;
+//            }
         }
         else
         {
@@ -622,6 +462,7 @@ std::string Scheduler::dynamic_state2string()
         s_states += _players[i]->state2string() + "\n";
     }
     
+    s_states += "force:" + std::to_string(enable_action()) + "\n";
     s_states += "terminal:" + std::to_string(int(_stop)) + "\n";
     
     return s_states;
@@ -636,6 +477,7 @@ void Scheduler::init(int prey, int predator)
 void Scheduler::reset()
 {
 //    std::cout << "TEST" << std::endl;
+    _time_stamp = 0;
     clear_buffer();
     build_environment();
     init_players();

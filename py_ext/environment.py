@@ -60,10 +60,10 @@ class ModelEnv:
         prev_state = toNPArr(prev_state)
 
         rewards = []
-        for i in range(N_PREY):
+        for i in range(1, N_PREY + 1):
 
-            cur_pos = np.array(cur_state[i*4:i*4+2])
-            prev_pos = np.array(prev_state[i*4:i*4+2])
+            cur_pos = np.array(cur_state[(-i)*4:(-i)*4+2])
+            prev_pos = np.array(prev_state[(-i)*4:(-i)*4+2])
 
             cur_target, cur_d = self.find_nearest_target(cur_pos)
             prev_target, prev_d = self.find_nearest_target(prev_pos)
@@ -75,3 +75,4 @@ class ModelEnv:
         ret = np.average(rewards) / DIAG
 
         return ret
+

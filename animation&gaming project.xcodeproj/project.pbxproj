@@ -10,6 +10,7 @@
 		40504F0C252C10EF00C9F49B /* OpenGL.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 40504F0B252C10EF00C9F49B /* OpenGL.framework */; };
 		405B5C7B252C160300A344A4 /* libGLEW.2.1.0.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = 405B5C7A252C160300A344A4 /* libGLEW.2.1.0.dylib */; };
 		405B5C7D252C161700A344A4 /* libglfw.3.3.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = 405B5C7C252C161700A344A4 /* libglfw.3.3.dylib */; };
+		407E4CDA2563583100AF2C4E /* Comm.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 407E4CD82563583000AF2C4E /* Comm.cpp */; };
 		40A66EAA254006A300BCE3B6 /* Player.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 40A66EA8254006A300BCE3B6 /* Player.cpp */; };
 		40D21BA72537FDBC00ACE2DF /* Scheduler.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 40D21B9D2537FDBC00ACE2DF /* Scheduler.cpp */; };
 		40D21BA82537FDBC00ACE2DF /* prey.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 40D21B9E2537FDBC00ACE2DF /* prey.cpp */; };
@@ -44,6 +45,8 @@
 		40504F0B252C10EF00C9F49B /* OpenGL.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = OpenGL.framework; path = System/Library/Frameworks/OpenGL.framework; sourceTree = SDKROOT; };
 		405B5C7A252C160300A344A4 /* libGLEW.2.1.0.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; name = libGLEW.2.1.0.dylib; path = ../../../../../../../usr/local/Cellar/glew/2.1.0_1/lib/libGLEW.2.1.0.dylib; sourceTree = "<group>"; };
 		405B5C7C252C161700A344A4 /* libglfw.3.3.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; name = libglfw.3.3.dylib; path = ../../../../../../../usr/local/Cellar/glfw/3.3.2/lib/libglfw.3.3.dylib; sourceTree = "<group>"; };
+		407E4CD82563583000AF2C4E /* Comm.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = Comm.cpp; sourceTree = "<group>"; };
+		407E4CD92563583000AF2C4E /* Comm.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = Comm.hpp; sourceTree = "<group>"; };
 		40A66EA8254006A300BCE3B6 /* Player.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = Player.cpp; sourceTree = "<group>"; };
 		40A66EA9254006A300BCE3B6 /* Player.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = Player.hpp; sourceTree = "<group>"; };
 		40D21B942537FDB200ACE2DF /* plane.hpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; path = plane.hpp; sourceTree = "<group>"; };
@@ -166,6 +169,7 @@
 				40D21BA12537FDBC00ACE2DF /* Wall.cpp */,
 				40D21BC9253BD09C00ACE2DF /* Animation.cpp */,
 				40A66EA8254006A300BCE3B6 /* Player.cpp */,
+				407E4CD82563583000AF2C4E /* Comm.cpp */,
 			);
 			name = src;
 			path = "animation&gaming project/src";
@@ -187,6 +191,7 @@
 				40D21BCA253BD09C00ACE2DF /* Animation.hpp */,
 				40D21BC6253BBC1700ACE2DF /* Lighting.hpp */,
 				40A66EA9254006A300BCE3B6 /* Player.hpp */,
+				407E4CD92563583000AF2C4E /* Comm.hpp */,
 			);
 			name = header;
 			path = "animation&gaming project/header";
@@ -259,6 +264,7 @@
 				40D21BAE2537FDBC00ACE2DF /* Shader.cpp in Sources */,
 				40D21BAA2537FDBC00ACE2DF /* predator.cpp in Sources */,
 				40A66EAA254006A300BCE3B6 /* Player.cpp in Sources */,
+				407E4CDA2563583100AF2C4E /* Comm.cpp in Sources */,
 				40D21BAF2537FDBC00ACE2DF /* plane.cpp in Sources */,
 				40D21BCB253BD09C00ACE2DF /* Animation.cpp in Sources */,
 				40D21BAD2537FDBC00ACE2DF /* Camera.cpp in Sources */,

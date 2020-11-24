@@ -200,7 +200,7 @@ void Renderer::load_models()
     m_scheduler->add_object(plane_object);
     m_scheduler->add_object(ball_object);
     
-    m_scheduler->init(2, 4); // (n_prey, n_predator)
+    m_scheduler->init(1, 4); // (n_prey, n_predator)
 //    obj_list.push_back(ball_object);
 //    obj_list.push_back(plane_object);
 }

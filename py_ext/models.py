@@ -3,29 +3,68 @@ from torch import nn
 
 from config import *
 
+NORMALIZATION = nn.LayerNorm
+def Normalizer(*args):
+
+    return NORMALIZATION(args)
+
 class Critic(nn.Module):
 
     def __init__(self, state_size=2, action_size=2, hidden_size=64):
         super(Critic, self).__init__()
 
+        self.state_size = state_size
+        self.action_size = action_size
+        self.hidden_size = hidden_size
+
         self.state_trans = nn.Sequential(
-            nn.Linear((N_PREY + N_PREDATOR) * state_size, hidden_size),
-            nn.BatchNorm1d(hidden_size),
+            nn.Linear((N_PREY + N_PREDATOR) * self.state_size, self.hidden_size),
+            Normalizer(self.hidden_size),
+            #nn.BatchNorm1d(hidden_size),
             nn.ReLU()
         )
 
         self.action_trans = nn.Sequential(
-            nn.Linear(N_PREDATOR * action_size, hidden_size),
-            nn.BatchNorm1d(hidden_size),
+            nn.Linear(N_PREDATOR * self.action_size, self.hidden_size),
+            Normalizer(self.hidden_size),
+            #nn.BatchNorm1d(hidden_size),
             nn.ReLU()
         )
 
         self.pred = nn.Sequential(
-            nn.Linear(hidden_size * 2, hidden_size),
-            nn.BatchNorm1d(hidden_size),
+            nn.Linear(self.hidden_size * 2, self.hidden_size),
+            Normalizer(self.hidden_size),
+            #nn.BatchNorm1d(hidden_size),
             nn.Dropout(0.8),
-            nn.Linear(hidden_size, 1)
+            nn.Linear(self.hidden_size, 1)
         )
+
+        self.gru = nn.GRU(input_size=(N_PREY + N_PREDATOR) * self.state_size + N_PREDATOR * self.action_size,
+                          hidden_size=self.hidden_size)
+
+    def forward_(self, sequence, action, mask):
+
+        """
+        :param sequence: torch.Tensor, (B, L, C_i)
+        :param action: torch.Tensor, (B, N * action_size)
+        :param mask: torch.Tensor, (B, L)
+        :return:
+        """
+
+
+        B = sequence.shape[0]
+
+        sequence = sequence.permute(1, 0, 2).float() # (L, B, C_i)
+        mask = mask.permute(1, 0).float() # (L, B)
+
+        h0 = torch.zeros((1, B, self.hidden_size))
+        output, _ = self.gru(sequence, h0) # (L, B, C_o)
+        output = output[mask == 1, :] # (B, C_o)
+
+        a_state = self.action_trans(action.float()) # (B, C_o)
+        pred = self.pred(torch.cat([output, a_state], dim=1))
+
+        return pred
 
     def forward(self, state, action):
         x_s = self.state_trans(state)
@@ -54,18 +93,52 @@ class Actor(nn.Module):
 
         self.net = nn.Sequential(
             nn.Linear((N_PREY + N_PREDATOR) * self.state_size, self.hidden_size),
-            nn.BatchNorm1d(self.hidden_size),
+            Normalizer(self.hidden_size),
+            #nn.BatchNorm1d(self.hidden_size),
             nn.ReLU(),
             nn.Linear(self.hidden_size, self.hidden_size),
-            nn.BatchNorm1d(self.hidden_size),
+            Normalizer(self.hidden_size),
+            #nn.BatchNorm1d(self.hidden_size),
             nn.ReLU(),
             nn.Dropout(0.8),
             nn.Linear(self.hidden_size, self.action_size),
             #nn.Linear(self.hidden_size, N_PREDATOR * self.action_size),
             #nn.Linear(self.hidden_size, N_PREDATOR * self.action_size * 2),
             #nn.ReLU(),
-            nn.Sigmoid()
+            #nn.Sigmoid(),
+            nn.Tanh()
         )
+
+        self.gru = nn.GRU(input_size=self.action_size + (N_PREY + N_PREDATOR) * self.state_size + 4,
+                          hidden_size=self.hidden_size)
+        self.header = nn.Sequential(
+            nn.Linear(self.hidden_size, self.hidden_size),
+            Normalizer(self.hidden_size),
+            #nn.ReLU(),
+            nn.Linear(self.hidden_size, self.action_size),
+            #nn.Sigmoid(),
+            nn.Tanh()
+        )
+
+    def forward_(self, sequence, mask):
+
+        """
+        :param sequence: torch.Tensor, (B, L, C_i)
+        :param mask: torch.Tensor, (B, L)
+        :return:
+        """
+
+        B = sequence.shape[0]
+
+        sequence = sequence.permute(1, 0, 2).float() # (L, B, C_i)
+        mask = mask.permute(1, 0).float() # (L, B)
+
+        h0 = torch.zeros((1, B, self.hidden_size)) # (1, B, C_o)
+        output, _ = self.gru(sequence, h0) # (L, B, C_o)
+        output = output[mask == 1, :] # (B, C_o)
+        pred = self.header(output) # (B, action_size)
+
+        return pred
 
     def forward(self, state):
         batch_size = state.size()[0]
@@ -80,11 +153,11 @@ class Actor(nn.Module):
     @staticmethod
     def sample_action(action, noise):
 
-        noise = (torch.rand(action.size()) - 0.5) * 2 * noise
+        noise = (torch.rand(action.size()) * 2 - 1) * noise
         noise = noise.to(action.device)
 
         action = action + noise
-        action = torch.clamp(action, 0, 1)
+        action = torch.clip(action, -1, 1)
 
         return action
 
@@ -93,8 +166,8 @@ class Actor(nn.Module):
         action_str = "action\n"
 
         for i in range(N_PREDATOR):
-            ax = (action[i * 2] - 0.5) * 2
-            ay = (action[i * 2 + 1] - 0.5) * 2
+            ax = action[i * 2]
+            ay = action[i * 2 + 1]
             #av = action[i * 3 + 2]
             #action_str += "%f,%f,%f;" % (ax, ay, av)
             action_str += "%f,%f;" % (ax, ay)
