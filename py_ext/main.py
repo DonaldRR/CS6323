@@ -279,7 +279,7 @@ if __name__ == '__main__':
     critic_net_target = Critic()
     critic_net_target.to(device=device)
 
-    lr_scheduler = LRScheduler(0.0001, 50000)
+    lr_scheduler = LRScheduler(1e-5, 50000)
     noiser = NoiseScheduler(NOISE_SCALE, 0.05, 50000)
 
     # init target
@@ -290,8 +290,8 @@ if __name__ == '__main__':
     critic_net_target.eval()
 
     # optim
-    actor_optim = optim.Adam(actor_net.parameters(), lr=0.0001, weight_decay=1e-5)
-    critic_optim = optim.Adam(critic_net.parameters(), lr=0.0001, weight_decay=1e-5)
+    actor_optim = optim.Adam(actor_net.parameters(), lr=1e-5, weight_decay=1e-5)
+    critic_optim = optim.Adam(critic_net.parameters(), lr=1e-5, weight_decay=1e-5)
 
     # memory bank
     buffer = Buffer(buffer_size=MEMORY_SIZE, batch_size=BATCH_SIZE)
@@ -341,7 +341,8 @@ if __name__ == '__main__':
                             prev_reward = model_env.compute_reward(cur_state, prev_state) if not msg.is_terminal else -1.0  # r_t
                             w = math.pow(2, prev_reward)
                             w = w + 2 if w >= 1.0 else w
-                            prev_reward = toTensor(np.array([prev_reward]), device) + 0.2
+                            prev_reward = prev_reward + 0.2 if prev_reward > -1.0 else prev_reward
+                            prev_reward = toTensor(np.array([prev_reward]), device)
                             R = prev_reward + gamma * R
                             buffer.append(w, [prev_state, prev_action, prev_reward, cur_state])
 
@@ -351,8 +352,8 @@ if __name__ == '__main__':
 
                         # compute next action
                         cur_action = actor_net(propagate_state(cur_state)).detach().view(-1)
-                        #cur_action = actor_net.forward_(*pad_sequence(history)).detach()[0]
-                        #cur_action = actor_net(cur_state.unsqueeze(0)).detach()[0] # a_t
+                        #cur_action = actor_net(sub_tensor(cur_state, 4, 0, 2)).detach()[0] # a_t
+                        print('a', cur_action)
                         if not is_eval:
                             # exploration with noise added to action
                             cur_action = Actor.sample_action(cur_action, noiser.step()) # a_t + noise
@@ -368,14 +369,13 @@ if __name__ == '__main__':
                         with torch.autograd.set_detect_anomaly(True):
                             if buffer.ready and not is_eval:
                                 lr = lr_scheduler.step()
-                                actor_optim.lr = lr * 0.1
+                                actor_optim.lr = lr
                                 critic_optim.lr = lr
                                 s_t, a_t, r_t, s_t_ = buffer.get_batch()
 
-                                #q_t = critic_net(s_t, a_t)
-                                #q_t_ = critic_net_target(s_t_, actor_net_target(s_t_).detach()).detach()
                                 critic_optim.zero_grad()
                                 q_t_ = critic_net_target(sub_tensor(s_t_, 4, 0, 2), actor_net_target(batch_propagate(s_t_)).detach().view(BATCH_SIZE, -1)).detach()
+                                #q_t_ = critic_net_target(sub_tensor(s_t_, 4, 0, 2), actor_net_target(sub_tensor(s_t_, 4, 0, 2)).detach().view(BATCH_SIZE, -1)).detach()
                                 q_t = critic_net(sub_tensor(s_t, 4, 0, 2), a_t)
                                 y = r_t + q_t_ * gamma
                                 y = torch.clamp(y, -5.0, 5.0)
@@ -388,6 +388,7 @@ if __name__ == '__main__':
                                 actor_optim.zero_grad()
                                 #q = -critic_net(s_t, actor_net(s_t)).mean()
                                 l_v = -critic_net(sub_tensor(s_t, 4, 0, 2), actor_net(batch_propagate(s_t)).view(BATCH_SIZE, -1)).mean()
+                                #l_v = -critic_net(sub_tensor(s_t, 4, 0, 2), actor_net(sub_tensor(s_t, 4, 0, 2)).view(BATCH_SIZE, -1)).mean()
                                 l_v.backward()
                                 torch.nn.utils.clip_grad_value_(actor_net.parameters(), 0.5)
                                 actor_optim.step()
@@ -400,6 +401,7 @@ if __name__ == '__main__':
                                 tb.add_scalar('p_n', positive_n_ratio, iteration)
                                 tb.add_scalar('train/l_q', l_q, iteration)
                                 tb.add_scalar('train/l_v', l_v, iteration)
+                                tb.add_scalar('train/lr', lr, iteration)
                                 iteration += 1
                         N_timestamps += 1
                 N_tracks += 1
@@ -411,4 +413,3 @@ if __name__ == '__main__':
                 else:
                     tb.add_scalar('train/game_t', T, i)
                     tb.add_scalar('train/r', R, i)
-                tb.add_scalar('n_actions', N_timestamps / N_tracks, i)

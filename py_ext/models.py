@@ -103,7 +103,6 @@ class Actor(nn.Module):
             nn.Dropout(0.8),
             nn.Linear(self.hidden_size, self.action_size),
             #nn.Linear(self.hidden_size, N_PREDATOR * self.action_size),
-            #nn.Linear(self.hidden_size, N_PREDATOR * self.action_size * 2),
             #nn.ReLU(),
             #nn.Sigmoid(),
             nn.Tanh()
